@@ -1,10 +1,15 @@
 package com.example.afra.myandroidmp3;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
-import android.media.Image;
-import android.provider.Settings;
-import android.support.v7.app.AppCompatActivity;
+import android.content.IntentFilter;
 import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
+import android.view.View;
+import android.widget.ImageView;
+import android.widget.TextView;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -12,92 +17,104 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
-import android.view.View;
-import android.widget.Button;
-import android.widget.EditText;
-import android.widget.ImageView;
-import android.widget.SeekBar;
-import android.widget.TextView;
+public class MainActivity extends AppCompatActivity implements View.OnClickListener{
 
+    private ImageView mStart;
+    private ImageView mNext;
+    private ImageView mPrevious;
+    private ImageView mStop;
+    private TextView mMusicName;
+    private TextView mSongerName;
+    private ActivityReceiver mActivityReceiver;
+    private List<Music> musicList = new ArrayList<Music>();
+    public static final String CTL_ACTION = "CTL_ACTION";
+    public static final String UPDATE_ACTION = "UPDATE_ACTION";
 
+    //定义音乐播放状态，0x11代表没有播放，0x12代表正在播放，0x13代表暂停
+    int status = 0x11;
+    String[] musicNames = new String[]{"完美生活", "那一年", "故乡"};
+    String[] songerNames = new String[]{"许巍", "许巍", "许巍"};
 
-public class MainActivity extends AppCompatActivity {
-
-    private SeekBar mSeekBar;
-    private Thread myThread = null;
-    //private String path = "http://172.27.63.233:8080/001.mp3";
-    private String path = "http://abv.cn/music/光辉岁月.mp3";
-    private Player mPlayer;
-    private TextView mEditText;
-    private boolean playOrPause = false;
-    private boolean firstPlay = true;
-    private List<Music> musicList = null;
-    private int position = 0;
-
-    public static final String CTL_ACTION = "com.trampcr.action.CTL_ACTION";
-    public static final String UPDATE_ACTION = "com.trampcr.action.UPDATE_ACTION";
-
-    /*private static final String URL = "jdbc:mysql://127.0.0.1:3306/infodb";
-    private static final String URL ="jdbc:mysql://47.95.10.11:3306/rrs_db";
-    private static final String USER = "root";
-    private static final String PASSWORD = "123456";*/
-    private Connection conn;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        mSeekBar = (SeekBar) findViewById(R.id.seekBar);
-        mEditText = (TextView) findViewById(R.id.music_name);
-        mEditText.setText(path);
 
-        musicList = new ArrayList<Music>();
+        mStart = (ImageView) findViewById(R.id.play);
+        mNext = (ImageView) findViewById(R.id.next);
+        mStop = (ImageView) findViewById(R.id.download);
+        mPrevious = (ImageView) findViewById(R.id.previous);
+        mMusicName = (TextView) findViewById(R.id.music_name);
+        mSongerName = (TextView) findViewById(R.id.stateText);
 
-        mPlayer = new Player(mSeekBar);
+        mStart.setOnClickListener(this);
+        mStop.setOnClickListener(this);
+        mNext.setOnClickListener(this);
+        mPrevious.setOnClickListener(this);
 
-        final ImageView mPlay = (ImageView) findViewById(R.id.play);
-        ImageView mNext = (ImageView) findViewById(R.id.next);
-        ImageView mPrevious = (ImageView) findViewById(R.id.previous);
+        mActivityReceiver = new ActivityReceiver();
+        //创建IntentFilter
+        IntentFilter filter = new IntentFilter();
+        //指定BroadcastReceiver监听的Action
+        filter.addAction(UPDATE_ACTION);
+        //注册BroadcastReceiver
+        registerReceiver(mActivityReceiver, filter);
 
-        mNext.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-               InitMusicList();
-                myThread = new Thread(new Runnable() {
-
-                    @Override
-                    public void run() {
-                       //System.out.println(musicList.get(position).getMUrl());
-                        mPlayer.playUrl(musicList.get(position).getMUrl());
-                    }
-                });
-
+        Intent intent = new Intent(MainActivity.this, MusicService.class);
+        //启动后台Service
+        startService(intent);
+    }
+    public class ActivityReceiver extends BroadcastReceiver {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            //获取Intent中的update消息，update代表播放状态
+            int update = intent.getIntExtra("update", -1);
+            //获取Intent中的current消息，current代表当前正在播放的歌曲
+            int current = intent.getIntExtra("current", -1);
+            if (current >= 0){
+                mMusicName.setText(musicNames[current]);
+                mSongerName.setText(songerNames[current]);
             }
-        });
-
-        mPlay.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if(firstPlay)
-                {
-                    firstPlay(v);
-                    firstPlay = !firstPlay;
-                }
-                else
-                {
-                    if (!playOrPause) {
-                        play(v);
-                        playOrPause = !playOrPause;
-                        mPlay.setBackgroundResource(R.drawable.pause);
-                    }
-                    else if (playOrPause) {
-                        pause(v);
-                        playOrPause = !playOrPause;
-                        mPlay.setBackgroundResource(R.drawable.play);
-                    }
-                }
+            switch (update){
+                case 0x11:
+                    mStart.setBackgroundResource(R.drawable.play);
+                    status = 0x11;
+                    break;
+                //控制系统进入播放状态
+                case 0x12:
+                    //在播放状态下设置使用暂停图标
+                    mStart.setBackgroundResource(R.drawable.pause);
+                    status = 0x12;
+                    break;
+                case 0x13:
+                    //在暂停状态下设置使用播放图标
+                    mStart.setBackgroundResource(R.drawable.play);
+                    status = 0x13;
+                    break;
             }
-        });
+        }
+    }
+
+    @Override
+    public void onClick(View v) {
+        Intent intent = new Intent(CTL_ACTION);
+        switch (v.getId()){
+            case R.id.play:
+                intent.putExtra("control", 1);
+                break;
+            case R.id.next:
+                intent.putExtra("control", 3);
+                break;
+            case R.id.previous:
+                intent.putExtra("control", 4);
+                break;
+            case R.id.download:
+                intent.putExtra("control", 2);
+                break;
+        }
+        //发送广播，将被Service中的BroadcastReceiver接收到
+        sendBroadcast(intent);
     }
 
     public void InitMusicList()
@@ -105,9 +122,9 @@ public class MainActivity extends AppCompatActivity {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                conn = Util.getConnection();
+                Connection conn = Util.getConnection();
                 System.out.println("All users info:");
-                Connection conn = null;
+
                 PreparedStatement psmt = null;
                 ResultSet rs = null;
                 conn = Util.getConnection();
@@ -129,7 +146,7 @@ public class MainActivity extends AppCompatActivity {
             }
         }).start();
     }
-    public void firstPlay(View view) {
+    /*public void firstPlay(View view) {
         myThread.start();
     }
 
@@ -145,5 +162,6 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         mPlayer.stop();
-    }
+    }*/
+
 }

@@ -1,5 +1,6 @@
 package com.example.afra.myandroidmp3;
 
+import android.annotation.SuppressLint;
 import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -8,10 +9,14 @@ import android.content.IntentFilter;
 import android.content.res.AssetFileDescriptor;
 import android.content.res.AssetManager;
 import android.media.MediaPlayer;
+import android.os.Handler;
 import android.os.IBinder;
 import android.support.annotation.Nullable;
+import android.widget.SeekBar;
 
 import java.io.IOException;
+import java.util.Timer;
+import java.util.TimerTask;
 
 /**
  * Created by afra on 2018/5/27.
@@ -21,8 +26,11 @@ public class MusicService extends Service {
 
     MyReceiver serviceReceiver;
     AssetManager mAssetManager;
-    String[] musics = new String[]{"prefectLife.mp3", "thatYear.mp3", "country.mp3"};
+    String[] musics = new String[]{"http://172.27.63.233:8080/music/havana.mp3", "thttp://172.27.63.233:8080/music/Problem.mp3", "http://172.27.63.233:8080/music/Shape of You.mp3"};
     MediaPlayer mMediaPlayer;
+    private SeekBar seekBar; // 拖动条
+    private Timer mTimer = new Timer(); // 计时器
+
     int status = 0x11;
     int current = 0; // 记录当前正在播放的音乐
 
@@ -60,7 +68,10 @@ public class MusicService extends Service {
                 prepareAndPlay(musics[current]);
             }
         });
+
     }
+
+
 
     public class MyReceiver extends BroadcastReceiver {
         @Override
@@ -95,6 +106,24 @@ public class MusicService extends Service {
                         mMediaPlayer.stop();
                         status = 0x11;
                     }
+                    break;
+                case 3:
+                    current++;
+                    if (current >= 3) {
+                        current = 0;
+                    }
+                    prepareAndPlay(musics[current]);
+                    status = 0x12;
+                    break;
+                case 4:
+                    current--;
+                    if (current < 0) {
+                        current = 3;
+                    }
+                    prepareAndPlay(musics[current]);
+                    status = 0x12;
+                    break;
+
             }
             //广播通知Activity更改图标、文本框
             Intent sendIntent = new Intent(MainActivity.UPDATE_ACTION);
@@ -107,11 +136,9 @@ public class MusicService extends Service {
 
     private void prepareAndPlay(String music) {
         try {
-            //打开指定的音乐文件
-            AssetFileDescriptor assetFileDescriptor = mAssetManager.openFd(music);
             mMediaPlayer.reset();
             //使用MediaPlayer加载指定的声音文件
-            mMediaPlayer.setDataSource(assetFileDescriptor.getFileDescriptor(), assetFileDescriptor.getStartOffset(), assetFileDescriptor.getLength());
+            mMediaPlayer.setDataSource(music);
             mMediaPlayer.prepare(); // 准备声音
             mMediaPlayer.start(); // 播放
         } catch (IOException e) {
